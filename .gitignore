@@ -1,0 +1,48 @@
+# 環境変数（APIキーを含むため絶対にコミットしない）
+.env
+
+# ChromaDB（ローカルDBデータ）
+.chroma/
+
+# Python キャッシュ
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+
+# 仮想環境
+.venv/
+venv/
+env/
+
+# テストキャッシュ
+.pytest_cache/
+.coverage
+htmlcov/
+
+# ビルド成果物
+dist/
+build/
+*.egg-info/
+*.egg
+
+# 香水データ（個人データのためコミットしない）
+data/perfumes.json
+
+# エディタ・OS 固有ファイル
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Claude Code 設定（ローカル専用）
+.claude/
+
+# 個人用ドキュメント（公開しない）
+TEXTBOOK.md
+
+# Hugging Face モデルキャッシュ（大容量のため除外）
+.cache/
