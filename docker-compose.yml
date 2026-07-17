@@ -1,0 +1,15 @@
+services:
+  api:
+    build: .
+    ports:
+      - "8000:8000"
+    env_file:
+      - .env
+    environment:
+      - CHROMA_PATH=/app/.chroma
+      - DEBUG=false
+      - ALLOWED_HOSTS=localhost,127.0.0.1
+    volumes:
+      # インデックスをホストと共有（build_index.py で構築したものをそのまま使う）
+      - ./.chroma:/app/.chroma:ro
+    restart: unless-stopped

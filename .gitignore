@@ -43,6 +43,10 @@ Thumbs.db
 
 # 個人用ドキュメント（公開しない）
 TEXTBOOK.md
+TEXTBOOK2.md
 
 # Hugging Face モデルキャッシュ（大容量のため除外）
 .cache/
+
+# Django
+api/db.sqlite3

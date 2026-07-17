@@ -7,6 +7,9 @@ dependencies = [
     "chromadb>=0.5.0",
     "sentence-transformers>=3.0.0",
     "python-dotenv>=1.0.0",
+    "django>=5.0",
+    "djangorestframework>=3.15.0",
+    "gunicorn>=22.0.0",
 ]
 
 [project.optional-dependencies]
