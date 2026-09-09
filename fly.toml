@@ -1,0 +1,49 @@
+# fly.toml app configuration file generated for perfume-rag-mcp on 2026-09-08T00:04:50+09:00
+#
+# See https://fly.io/docs/reference/configuration/ for information about how to use this file.
+#
+
+app = 'perfume-rag-mcp'
+primary_region = 'nrt'
+
+[build]
+  dockerfile = 'Dockerfile.mcp'
+
+[env]
+  CHROMA_PATH = '/data/chroma'
+  MCP_ALLOWED_HOSTS = 'perfume-rag-mcp.fly.dev'
+  MCP_TRANSPORT = 'streamable-http'
+  PORT = '8080'
+  # MCP_AUTH_TOKEN はここに書かない。`fly secrets set` で注入する（このファイルは平文で残るため）。
+
+[[mounts]]
+  source = 'chroma_data'       # 事前に `fly volumes create chroma_data --size 1 --region nrt` が必要
+  destination = '/data/chroma'
+
+[http_service]
+  internal_port = 8080
+  force_https = true
+  auto_stop_machines = 'stop'
+  auto_start_machines = true
+  # 0にすると未使用時に停止してコストを抑えられるが、次のリクエストで
+  # 埋め込みモデルの再ロード分（数秒〜十数秒）のコールドスタートが発生する。
+  # レイテンシを優先するなら 1 にする。
+  min_machines_running = 0
+  processes = ['app']
+
+  # [http_service]配下のchecksはHTTPチェックとして扱われる（type='tcp'は効かなかった）。
+  # "/" はmcp_server.py側で認証免除にしてあり、モデルロードを待たずに即座に200を返す
+  # （streamable-http起動時はモデルの事前ロードをしない設計にしたため）。
+  # grace_periodはFly.io側の上限が60秒なのでそれに合わせる。
+  [[http_service.checks]]
+    interval = '15s'
+    timeout = '5s'
+    grace_period = '60s'
+    method = 'GET'
+    path = '/'
+
+[[vm]]
+  # 埋め込みモデル(safetensors、約1.1GB)をmmapするため、1GBだとOOMで落ちる。
+  # torch/transformers/chromadbのベース消費(数百MB)+モデル分で最低でも2GBを確保する。
+  memory = '2gb'
+  cpus = 1

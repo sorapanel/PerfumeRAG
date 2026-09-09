@@ -1,0 +1,41 @@
+FROM python:3.11-slim
+
+WORKDIR /app
+
+# 依存ライブラリのインストール（devの依存関係は含めない: 本番イメージを最小化するため）
+COPY pyproject.toml .
+# torch(sentence-transformersの依存)はデフォルトだとGPU向けCUDAビルドが入り、
+# 数GB単位で肥大化する。Flyのマシンにはこのアプリの用途上GPUが無いのでCPU専用ビルドを先に固定する。
+RUN pip install --no-cache-dir torch --index-url https://download.pytorch.org/whl/cpu
+RUN pip install --no-cache-dir -e "."
+
+# キャッシュ先を/app配下に固定（デフォルトはビルド時のrootの $HOME 下になり、
+# 後で非rootユーザーに切り替えると読めなくなる）
+ENV HF_HOME=/app/.cache/huggingface
+
+# 埋め込みモデルを事前にダウンロード（ビルド時のレイヤーとしてキャッシュし、
+# コンテナ起動のたびにダウンロードが走らないようにする）
+RUN python -c "from sentence_transformers import SentenceTransformer; SentenceTransformer('intfloat/multilingual-e5-base')"
+
+# このイメージの責務は検索(Retrieval)専用のMCPサーバーのみ。
+# Django API(api/)・生成ロジック・元データ(data/)は含めない（1コンテナ=1責務）。
+COPY src/ ./src/
+COPY scripts/mcp_server.py ./scripts/mcp_server.py
+
+# ChromaDBの永続化先。Fly Volumeをここにマウントする想定（中身はイメージに含めない）。
+RUN mkdir -p /data/chroma
+
+# rootで実行しない
+RUN useradd --create-home --uid 1000 appuser \
+    && chown -R appuser:appuser /app /data
+USER appuser
+
+ENV CHROMA_PATH=/data/chroma \
+    MCP_TRANSPORT=streamable-http \
+    PORT=8080 \
+    HF_HUB_OFFLINE=1 \
+    TRANSFORMERS_OFFLINE=1
+
+EXPOSE 8080
+
+CMD ["python", "scripts/mcp_server.py"]

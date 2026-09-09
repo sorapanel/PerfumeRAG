@@ -1,0 +1,38 @@
+# 秘密情報・個人データ（ビルドコンテキストにも含めない）
+.env
+.env.*
+!.env.example
+data/perfumes.json
+.chroma/
+
+# Git / エディタ / OS
+.git/
+.gitignore
+.claude/
+.DS_Store
+.vscode/
+.idea/
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.pytest_cache/
+.coverage
+htmlcov/
+*.egg-info/
+.venv/
+venv/
+
+# Django（MCPサーバーイメージには不要）
+api/db.sqlite3
+
+# ドキュメント・レポート類（イメージに含める必要なし）
+TEXTBOOK.md
+TEXTBOOK2.md
+TEST_REPORT.md
+TEST_REPORT2.md
+README.md
+
+# テスト
+tests/
