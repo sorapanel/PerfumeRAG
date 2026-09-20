@@ -7,6 +7,23 @@ on:
     branches: [main]
 
 jobs:
+  # 型ヒント(CLAUDE.mdの規約)とimport整列・未使用importをチェックする。
+  # 重い依存を入れずに済むので、testジョブと並列で数十秒で終わる。
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install ruff
+        run: pip install ruff
+
+      - name: Check lint and type hints
+        run: ruff check src/ scripts/ tests/
+
   test:
     runs-on: ubuntu-latest
     steps:
@@ -37,9 +54,11 @@ jobs:
         run: pytest tests/ -v
 
   deploy:
-    needs: test
+    needs: [lint, test]
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'
     runs-on: ubuntu-latest
+    env:
+      APP_URL: https://perfume-rag-mcp.fly.dev
     steps:
       - uses: actions/checkout@v4
 
@@ -51,3 +70,33 @@ jobs:
         run: flyctl deploy --remote-only
         env:
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+
+      # flyctl deployの成功は「イメージを配置できた」までしか保証しない。
+      # 実際にサービスが応答するかは別問題（過去にOOMクラッシュループ・ヘルスチェックが
+      # 401で弾かれる等で、デプロイ成功なのに502という状態が起きた）。ここで実際に叩いて確認する。
+      # min_machines_running=0 で停止しているため、最初の数回はコールドスタート待ちで失敗する前提。
+      - name: Smoke test — health endpoint responds
+        run: |
+          for i in $(seq 1 20); do
+            CODE=$(curl -s -o /dev/null -w "%{http_code}" --max-time 30 "$APP_URL/" || echo "000")
+            echo "attempt $i: HTTP $CODE"
+            if [ "$CODE" = "200" ]; then
+              echo "health check passed"
+              exit 0
+            fi
+            sleep 10
+          done
+          echo "health check never returned 200"
+          exit 1
+
+      # 認証が外れていないことの回帰テスト。トークンを渡さずに401が返ることを確認するので、
+      # シークレットを使わずに実行できる。
+      - name: Smoke test — auth is enforced on /mcp
+        run: |
+          CODE=$(curl -s -o /dev/null -w "%{http_code}" --max-time 30 "$APP_URL/mcp")
+          echo "unauthenticated /mcp returned HTTP $CODE"
+          if [ "$CODE" != "401" ]; then
+            echo "expected 401 but got $CODE — authentication may be broken"
+            exit 1
+          fi
+          echo "auth check passed"

@@ -24,6 +24,8 @@ import sys
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
 
 from mcp.server.mcpserver import MCPServer
+from starlette.responses import PlainTextResponse
+from starlette.types import ASGIApp, Receive, Scope, Send
 
 from perfume_rag.retriever import DEFAULT_TOP_K, PerfumeRetriever
 
@@ -91,11 +93,11 @@ class _BearerAuthMiddleware:
     前提とするため、個人利用の共有トークン方式には過剰と判断しここでは使わない。
     """
 
-    def __init__(self, app, token: str) -> None:
+    def __init__(self, app: ASGIApp, token: str) -> None:
         self._app = app
         self._token = token
 
-    async def __call__(self, scope, receive, send):
+    async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
         if scope["type"] != "http":
             await self._app(scope, receive, send)
             return
@@ -104,10 +106,7 @@ class _BearerAuthMiddleware:
         # ここを認証対象にすると常に401になり、Flyがマシンを健全と判断できず実トラフィックが
         # 一切回ってこなくなる（"/mcp" は検索ツール本体なので当然認証対象のまま）。
         if scope["path"] == "/":
-            from starlette.responses import PlainTextResponse
-
-            response = PlainTextResponse("ok", status_code=200)
-            await response(scope, receive, send)
+            await PlainTextResponse("ok", status_code=200)(scope, receive, send)
             return
 
         headers = dict(scope.get("headers") or [])
@@ -116,10 +115,7 @@ class _BearerAuthMiddleware:
 
         # hmac.compare_digest でタイミング攻撃によるトークン推測を防ぐ
         if not provided or not hmac.compare_digest(provided, self._token):
-            from starlette.responses import PlainTextResponse
-
-            response = PlainTextResponse("Unauthorized", status_code=401)
-            await response(scope, receive, send)
+            await PlainTextResponse("Unauthorized", status_code=401)(scope, receive, send)
             return
 
         await self._app(scope, receive, send)
@@ -136,7 +132,7 @@ def _run_remote() -> None:
     allowed_hosts = [h for h in os.environ["MCP_ALLOWED_HOSTS"].split(",") if h]
     allowed_origins = [o for o in os.getenv("MCP_ALLOWED_ORIGINS", "").split(",") if o]
 
-    app = mcp.streamable_http_app(
+    mcp_app = mcp.streamable_http_app(
         host="0.0.0.0",
         transport_security=TransportSecuritySettings(
             enable_dns_rebinding_protection=True,
@@ -145,7 +141,7 @@ def _run_remote() -> None:
             allowed_origins=allowed_origins,
         ),
     )
-    app = _BearerAuthMiddleware(app, token=auth_token)
+    app: ASGIApp = _BearerAuthMiddleware(mcp_app, token=auth_token)
 
     uvicorn.run(app, host="0.0.0.0", port=int(os.getenv("PORT", "8080")))
 
